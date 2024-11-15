@@ -1,0 +1,7 @@
+# Comment
+[default]
+host=localhost
+port = 5432
+dbname = "fsanitycheck"
+user=olivier
+
