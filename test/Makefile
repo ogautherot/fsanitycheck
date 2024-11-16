@@ -5,12 +5,15 @@ OBJS=upload.o
 .PHONY: all clean test
 
 #all: ${TARGET}
-all: upload patch_len sign_files
+all: upload patch_len sign_files patch_extension
 upload: upload.cpp
 	${CXX} -g -o upload upload.cpp -lpq
 
 patch_len: patch_len.cpp
 	${CXX} -g -o patch_len patch_len.cpp -lpq
+
+patch_extension: patch_extension.cpp
+	${CXX} -g -o patch_extension patch_extension.cpp -lpq
 
 sign_files: sign_files.cpp
 	${CXX} -g -o sign_files sign_files.cpp -lcrypto -lpq 
