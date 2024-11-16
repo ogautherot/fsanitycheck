@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <unistd.h>
 #include <sys/stat.h>
+#include <libgen.h>
 
 #include <openssl/sha.h>
 
@@ -266,8 +267,8 @@ int main(int ac, char *av[]) {
     char connstr[] = "dbname=fsanitycheck2 user=olivier host=localhost port=5432";
 
     if (OpenConnection(connstr) == 0) {
-        AddExtensionsToFiles();
-        //AddDirnameToDirs();
+        //AddExtensionsToFiles();
+        AddDirnameToDirs();
     }
     return 0;
 }

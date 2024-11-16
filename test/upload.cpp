@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <unistd.h>
+#include <libgen.h>
 
 #include <iostream>
 #include <string>
@@ -42,12 +43,12 @@ int OpenConnection(char *connstr)
  *
  * @return	Returns the index of the row containing the path, or -1 if it couldn't be inserted.
  */
-int AddPath(char *host, char *path)
+int AddPath(char *host, char *path, char *dirname)
 {
 	int row = -1;
-	char *args[2] = { host, path };
-	const char qry[] = "select get_path_idx($1, $2)";
-	PGresult *res = PQexecParams(pg, qry, 2, NULL, args, NULL, NULL, 0);
+	char *args[] = { host, path, dirname };
+	const char qry[] = "select get_path_idx($1, $2, $3)";
+	PGresult *res = PQexecParams(pg, qry, 3, NULL, args, NULL, NULL, 0);
 	if (res != NULL)	{
 		ExecStatusType stat = PQresultStatus(res);
 		if ((stat == PGRES_TUPLES_OK) || (stat == PGRES_COMMAND_OK))	{
@@ -64,11 +65,11 @@ int AddPath(char *host, char *path)
 /**
  *
  */
-int AddFile(char *host, char *path, char *fname)
+int AddFile(char *host, char *path, char *dirname, char *fname, char *ext)
 {
 	int row = -1;
-	char *args[3] = { host, path, fname };
-	const char qry[] = "select get_file_idx($1, $2, $3)";
+	char *args[] = { host, path, dirname, fname, ext };
+	const char qry[] = "select get_file_idx($1, $2, $3, $4, $5)";
 	PGresult *res = PQexecParams(pg, qry, 3, NULL, args, NULL, NULL, 0);
 	if (res != NULL)	{
 		ExecStatusType stat = PQresultStatus(res);
@@ -88,26 +89,29 @@ int AddFile(char *host, char *path, char *fname)
  */
 void EnumeratePath(char *host, char *line)
 {
-	//char *end = line;
 	char *ptr = line + 1;
 	char *fname = NULL;
 
 	if (*line != '/')	{
 		cout << "Absolute path required\n";
 	} else {
+		char *ext = NULL;
 		do {
 			if (*ptr == '/')	{
 				fname = ptr + 1;
 				*ptr = 0;
-				//cout << "==> " << line << "\n";
-				//AddPath(host, line);
 				*ptr = '/';
+			} else if (*ptr == '.') {
+				ext = ptr + 1;
 			}
 			ptr++;
 		} while (*ptr);
-		//end = ptr;
+
+        if (ext < fname) {
+            ext = (char *) "";
+		}
 		fname[-1] = 0;
-		AddFile(host, line, fname);
+		AddFile(host, line, basename(line), fname, ext);
 		// cout << "**> File name: " << fname << "\n";
 	}
 }
