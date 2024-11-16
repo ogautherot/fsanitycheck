@@ -2,8 +2,8 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 14.13 (Ubuntu 14.13-0ubuntu0.22.04.1)
--- Dumped by pg_dump version 14.13 (Ubuntu 14.13-0ubuntu0.22.04.1)
+-- Dumped from database version 14.14 (Ubuntu 14.14-1.pgdg24.04+1)
+-- Dumped by pg_dump version 14.14 (Ubuntu 14.14-1.pgdg24.04+1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -17,10 +17,10 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
--- Name: get_file_idx(text, text, text, bigint, bigint, bigint, text, bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
+-- Name: get_file_idx(text, text, text, text, bigint, bigint, bigint, text, bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.get_file_idx(_host text, _path text, _filename text, _statlen bigint DEFAULT '-1'::integer, _reallen bigint DEFAULT '-1'::integer, _disk_usage bigint DEFAULT '-1'::integer, _hash text DEFAULT ''::text, _mtime bigint DEFAULT 0, _mtime_nsec bigint DEFAULT 0) RETURNS bigint
+CREATE FUNCTION public.get_file_idx(_host text, _path text, _filename text, _ext text DEFAULT ''::text, _statlen bigint DEFAULT '-1'::integer, _reallen bigint DEFAULT '-1'::integer, _disk_usage bigint DEFAULT '-1'::integer, _hash text DEFAULT ''::text, _mtime bigint DEFAULT 0, _mtime_nsec bigint DEFAULT 0) RETURNS bigint
     LANGUAGE plpgsql
     AS $$
 declare
@@ -35,8 +35,8 @@ begin
 	if not found
 	then
 		with idx_list as (
-			insert into files (filename, idx_dirs, statlen, reallen, disk_usage, hash, mtime, mtime_nsec)
-			values (_filename, dir_idx, _statlen, _reallen, _disk_usage, _hash, _mtime, _mtime_nsec)
+			insert into files (filename, ext, idx_dirs, statlen, reallen, disk_usage, hash, mtime, mtime_nsec)
+			values (_filename, _ext, dir_idx, _statlen, _reallen, _disk_usage, _hash, _mtime, _mtime_nsec)
 			returning idx_files as idx_files
 		)
 		select idx_files into file_idx from idx_list;
@@ -47,13 +47,46 @@ end;
 $$;
 
 
-ALTER FUNCTION public.get_file_idx(_host text, _path text, _filename text, _statlen bigint, _reallen bigint, _disk_usage bigint, _hash text, _mtime bigint, _mtime_nsec bigint) OWNER TO postgres;
+ALTER FUNCTION public.get_file_idx(_host text, _path text, _filename text, _ext text, _statlen bigint, _reallen bigint, _disk_usage bigint, _hash text, _mtime bigint, _mtime_nsec bigint) OWNER TO postgres;
 
 --
--- Name: get_path_idx(text, text); Type: FUNCTION; Schema: public; Owner: olivier
+-- Name: get_file_idx(text, text, text, text, text, bigint, bigint, bigint, text, bigint, bigint); Type: FUNCTION; Schema: public; Owner: postgres
 --
 
-CREATE FUNCTION public.get_path_idx(_host text, _path text) RETURNS bigint
+CREATE FUNCTION public.get_file_idx(_host text, _path text, _dirname text, _filename text, _ext text DEFAULT ''::text, _statlen bigint DEFAULT '-1'::integer, _reallen bigint DEFAULT '-1'::integer, _disk_usage bigint DEFAULT '-1'::integer, _hash text DEFAULT ''::text, _mtime bigint DEFAULT 0, _mtime_nsec bigint DEFAULT 0) RETURNS bigint
+    LANGUAGE plpgsql
+    AS $$
+declare
+	file_idx	bigint;
+	dir_idx		bigint;
+
+begin
+	dir_idx = get_path_idx(_host, _path, _dirname);
+
+	select idx_files into file_idx from files
+			where idx_dirs = dir_idx and filename = _filename;
+	if not found
+	then
+		with idx_list as (
+			insert into files (filename, ext, idx_dirs, statlen, reallen, disk_usage, hash, mtime, mtime_nsec)
+			values (_filename, _ext, dir_idx, _statlen, _reallen, _disk_usage, _hash, _mtime, _mtime_nsec)
+			returning idx_files as idx_files
+		)
+		select idx_files into file_idx from idx_list;
+	end if;
+
+	return file_idx;
+end;
+$$;
+
+
+ALTER FUNCTION public.get_file_idx(_host text, _path text, _dirname text, _filename text, _ext text, _statlen bigint, _reallen bigint, _disk_usage bigint, _hash text, _mtime bigint, _mtime_nsec bigint) OWNER TO postgres;
+
+--
+-- Name: get_path_idx(text, text, text); Type: FUNCTION; Schema: public; Owner: olivier
+--
+
+CREATE FUNCTION public.get_path_idx(_host text, _path text, _dirname text DEFAULT ''::text) RETURNS bigint
     LANGUAGE plpgsql
     AS $$
 declare
@@ -65,7 +98,7 @@ if not found
 then
 	begin
 		with idx_list as (
-			insert into dirs (host, path) values (_host, _path) 
+			insert into dirs (host, path, dirname) values (_host, _path, _dirname) 
 					returning idx_dirs as idx_dirs
 		)
 		select idx_dirs into idx from idx_list;
@@ -77,7 +110,7 @@ end;
 $$;
 
 
-ALTER FUNCTION public.get_path_idx(_host text, _path text) OWNER TO olivier;
+ALTER FUNCTION public.get_path_idx(_host text, _path text, _dirname text) OWNER TO olivier;
 
 SET default_tablespace = '';
 
@@ -91,7 +124,8 @@ CREATE TABLE public.dirs (
     idx_dirs bigint NOT NULL,
     host text NOT NULL,
     path text NOT NULL,
-    path_bak text
+    path_bak text,
+    dirname text
 );
 
 
@@ -132,7 +166,8 @@ CREATE TABLE public.files (
     hash text DEFAULT ''::text NOT NULL,
     mtime bigint,
     mtime_nsec bigint,
-    file_found boolean
+    file_found boolean,
+    ext text
 );
 
 
@@ -258,7 +293,14 @@ CREATE INDEX path_dir_idx ON public.dirs USING btree (host, path) WITH (deduplic
 -- Name: path_file_idx; Type: INDEX; Schema: public; Owner: olivier
 --
 
-CREATE INDEX path_file_idx ON public.files USING btree (idx_dirs, filename) WITH (deduplicate_items='true');
+CREATE INDEX path_file_idx ON public.files USING btree (idx_dirs, filename);
+
+
+--
+-- Name: realsize_path_name; Type: INDEX; Schema: public; Owner: olivier
+--
+
+CREATE INDEX realsize_path_name ON public.files USING btree (reallen, idx_files);
 
 
 --
@@ -277,10 +319,10 @@ ALTER TABLE ONLY public.files
 
 
 --
--- Name: FUNCTION get_file_idx(_host text, _path text, _filename text, _statlen bigint, _reallen bigint, _disk_usage bigint, _hash text, _mtime bigint, _mtime_nsec bigint); Type: ACL; Schema: public; Owner: postgres
+-- Name: FUNCTION get_file_idx(_host text, _path text, _filename text, _ext text, _statlen bigint, _reallen bigint, _disk_usage bigint, _hash text, _mtime bigint, _mtime_nsec bigint); Type: ACL; Schema: public; Owner: postgres
 --
 
-GRANT ALL ON FUNCTION public.get_file_idx(_host text, _path text, _filename text, _statlen bigint, _reallen bigint, _disk_usage bigint, _hash text, _mtime bigint, _mtime_nsec bigint) TO olivier;
+GRANT ALL ON FUNCTION public.get_file_idx(_host text, _path text, _filename text, _ext text, _statlen bigint, _reallen bigint, _disk_usage bigint, _hash text, _mtime bigint, _mtime_nsec bigint) TO olivier;
 
 
 --
