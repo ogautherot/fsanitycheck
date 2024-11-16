@@ -70,7 +70,7 @@ int AddFile(char *host, char *path, char *dirname, char *fname, char *ext)
 	int row = -1;
 	char *args[] = { host, path, dirname, fname, ext };
 	const char qry[] = "select get_file_idx($1, $2, $3, $4, $5)";
-	PGresult *res = PQexecParams(pg, qry, 3, NULL, args, NULL, NULL, 0);
+	PGresult *res = PQexecParams(pg, qry, 5, NULL, args, NULL, NULL, 0);
 	if (res != NULL)	{
 		ExecStatusType stat = PQresultStatus(res);
 		if ((stat == PGRES_TUPLES_OK) || (stat == PGRES_COMMAND_OK))	{
